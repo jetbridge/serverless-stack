@@ -11,13 +11,11 @@ const { getChildLogger } = require("@serverless-stack/core");
 const logger = getChildLogger("api-server");
 
 module.exports = class ApiServer {
-  constructor({ constructsState, cdkWatcherState, lambdaWatcherState }) {
+  constructor({ constructsState }) {
     this.requests = {};
     this.server = null;
     this.pubsub = new PubSub();
     this.constructsState = constructsState;
-    this.cdkWatcherState = cdkWatcherState;
-    this.lambdaWatcherState = lambdaWatcherState;
   }
 
   async start(port) {
@@ -32,7 +30,7 @@ module.exports = class ApiServer {
 
     // Open browser
     const url = `http://localhost:${port}`;
-    await openBrowser(url);
+    openBrowser(url);
 
     logger.debug("Lambda runtime server started");
   }
@@ -96,13 +94,19 @@ module.exports = class ApiServer {
     const resolvers = {
       Query: {
         getRuntimeLogs: () => [],
-        getInfraStatus: () => this.cdkWatcherState.getStatus(),
-        getLambdaStatus: () => this.lambdaWatcherState.getStatus(),
+        getInfraStatus: () => {
+          // TODO: Implement
+          return false;
+        },
+        getLambdaStatus: () => {
+          // TODO: Implement
+          return false;
+        },
         getConstructs: async () => await this.constructsState.listConstructs(),
       },
       Mutation: {
         deploy: async () => {
-          await this.cdkWatcherState.handleDeploy();
+          // TODO: Implement
         },
         invoke: async (_, { data }) => {
           await this.constructsState.invoke(JSON.parse(data));
@@ -155,7 +159,7 @@ module.exports = class ApiServer {
     app.use(express.static(path.join(consolePath, "build")));
     app.use(express.static(path.join(consolePath, "public")));
 
-    app.use((req, res) => {
+    app.use((_req, res) => {
       res.sendFile(path.join(consolePath, "build", "index.html"));
     });
   }

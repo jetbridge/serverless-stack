@@ -135,6 +135,7 @@ exports.main = function (event, context, callback) {
     // Send payload in chunks to get around API Gateway 128KB limit
     const payload = zlib.gzipSync(
       JSON.stringify({
+        functionId: process.env.SST_FUNCTION_ID,
         debugRequestTimeoutInMs: context.getRemainingTimeInMillis(),
         debugSrcPath: process.env.SST_DEBUG_SRC_PATH,
         debugSrcHandler: process.env.SST_DEBUG_SRC_HANDLER,
@@ -299,6 +300,7 @@ function constructEnvs() {
           "SST_DEBUG_ENDPOINT",
           "SST_DEBUG_SRC_HANDLER",
           "SST_DEBUG_SRC_PATH",
+          "SST_FUNCTION_ID",
           "AWS_LAMBDA_FUNCTION_MEMORY_SIZE",
           "AWS_LAMBDA_LOG_GROUP_NAME",
           "AWS_LAMBDA_LOG_STREAM_NAME",
