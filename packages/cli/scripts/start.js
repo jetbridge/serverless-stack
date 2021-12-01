@@ -4,7 +4,6 @@ const path = require("path");
 const util = require("util");
 const fs = require("fs-extra");
 const chalk = require("chalk");
-const crypto = require("crypto");
 const detect = require("detect-port-alt");
 const {
   logger,
@@ -157,14 +156,43 @@ module.exports = async function (argv, config, cliInfo) {
   });
 
   const stacksWatcher = new Stacks.Watcher(config.main);
-  const stacksBuilder = useStacksBuilder(paths.appPath, config);
-  stacksBuilder.onTransition((state) => console.log("State:", state.value));
+  const stacksBuilder = useStacksBuilder(
+    paths.appPath,
+    config,
+    cliInfo.cdkOptions,
+    deploy
+  );
+  stacksBuilder.onTransition((state) => {
+    if (state.value === "deployable") {
+      clientLogger.info(
+        chalk.cyan(
+          "There are new infrastructure changes. Press ENTER to redeploy."
+        )
+      );
+    }
+  });
+  stacksBuilder.onEvent((evt) => {
+    if (evt.type === "done.invoke.deploy") {
+      watcher.reload(paths.appPath, config);
+      funcs.splice(0, funcs.length, ...State.Function.read(paths.appPath));
+    }
+  });
   stacksWatcher.onChange.add(() => stacksBuilder.send("FILE_CHANGE"));
+  process.stdin.on("data", () => stacksBuilder.send("TRIGGER_DEPLOY"));
 
   // Handle requests from udp or ws
   async function handleRequest(req) {
     const timeoutAt = Date.now() + req.debugRequestTimeoutInMs;
     const func = funcs.find((f) => f.id === req.functionId);
+    clientLogger.info(
+      chalk.grey(
+        `${req.context.awsRequestId} REQUEST ${objectUtil.truncate(req.event, {
+          totalLength: 1500,
+          arrayLength: 10,
+          stringLength: 100,
+        })}`
+      )
+    );
     if (!func) {
       console.error("Unable to find function", req.functionId);
       return {
@@ -228,6 +256,7 @@ module.exports = async function (argv, config, cliInfo) {
       };
     }
   }
+
   bridge.onRequest(handleRequest);
   ws.onRequest(handleRequest);
 
@@ -309,9 +338,7 @@ async function deployApp(argv, config, cliInfo) {
   });
 
   // Build
-  const cdkManifest = await synth(cliInfo.cdkOptions);
-  const cdkOutPath = path.join(paths.appBuildPath, "cdk.out");
-  const checksumData = generateChecksumData(cdkManifest, cdkOutPath);
+  await synth(cliInfo.cdkOptions);
 
   let deployRet;
   if (IS_TEST) {
@@ -337,7 +364,7 @@ async function deployApp(argv, config, cliInfo) {
     );
   }
 
-  return { deployRet, checksumData };
+  return { deployRet };
 }
 
 async function startApiServer() {
@@ -414,22 +441,7 @@ async function updateStaticSiteEnvironmentOutputs(deployRet) {
   // Update file
   await fs.writeJson(environmentOutputValuesPath, environments);
 }
-function generateChecksumData(cdkManifest, cdkOutPath) {
-  const checksums = {};
-  cdkManifest.stacks.forEach(({ name }) => {
-    const templatePath = path.join(cdkOutPath, `${name}.template.json`);
-    const templateContent = fs.readFileSync(templatePath);
-    checksums[name] = generateChecksum(templateContent);
-  });
-  return checksums;
-}
-function generateChecksum(templateContent) {
-  const hash = crypto.createHash("sha1");
-  hash.setEncoding("hex");
-  hash.write(templateContent);
-  hash.end();
-  return hash.read();
-}
+
 async function chooseServerPort(defaultPort) {
   const host = "0.0.0.0";
   logger.debug(`Checking port ${defaultPort} on host ${host}`);
