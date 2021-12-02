@@ -1,3 +1,4 @@
+import chokidar from "chokidar";
 import { interpret, actions, assign, createMachine } from "xstate";
 import { Config } from "../config";
 import { Stacks } from "../stacks";
@@ -21,7 +22,7 @@ type Context = {
   pendingHash: string;
 };
 
-function sleep(name: string, duration = 1000) {
+function stub(name: string, duration = 1000) {
   return function () {
     console.log(name);
     return new Promise((r) => setTimeout(r, duration));
@@ -36,6 +37,13 @@ const machine = createMachine<Context, Events>(
       idle: {
         on: {
           FILE_CHANGE: "building",
+        },
+      },
+      failed: {
+        states: {
+          build: {},
+          synth: {},
+          deploy: {},
         },
       },
       building: {
@@ -59,7 +67,7 @@ const machine = createMachine<Context, Events>(
               target: "building",
             },
             {
-              target: "idle",
+              target: "failed.build",
             },
           ],
         },
@@ -89,7 +97,7 @@ const machine = createMachine<Context, Events>(
               target: "building",
             },
             {
-              target: "idle",
+              target: "failed.synth",
             },
           ],
         },
@@ -118,6 +126,15 @@ const machine = createMachine<Context, Events>(
               }),
             },
           ],
+          onError: [
+            {
+              cond: "isDirty",
+              target: "building",
+            },
+            {
+              target: "failed.deploy",
+            },
+          ],
         },
       },
     },
@@ -131,9 +148,9 @@ const machine = createMachine<Context, Events>(
   },
   {
     services: {
-      build: sleep("build"),
-      deploy: sleep("deploy"),
-      synth: sleep("synth"),
+      build: stub("build"),
+      deploy: stub("deploy"),
+      synth: stub("synth"),
     },
     guards: {
       isDirty,
@@ -172,6 +189,14 @@ export function useStacksBuilder(
         deployedHash: generateChecksum(cdkOutPath),
       })
   );
+  chokidar
+    .watch(path.dirname(config.main), {
+      persistent: true,
+      ignoreInitial: true,
+      followSymlinks: false,
+      disableGlobbing: false,
+    })
+    .on("change", () => service.send("FILE_CHANGE"));
   service.start();
   return service;
 }

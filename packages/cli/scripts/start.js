@@ -10,7 +10,6 @@ const {
   getChildLogger,
   STACK_DEPLOY_STATUS,
   Runtime,
-  Stacks,
   Bridge,
   State,
   useStacksBuilder,
@@ -29,6 +28,7 @@ const {
 const objectUtil = require("../lib/object");
 const ApiServer = require("./util/ApiServer");
 const { deserializeError } = require("../lib/serializeError");
+const ConstructsState = require("./util/ConstructsState");
 
 const API_SERVER_PORT = 4000;
 
@@ -155,7 +155,19 @@ module.exports = async function (argv, config, cliInfo) {
     clientLogger.info(chalk.gray("New: Done rebuilding."));
   });
 
-  const stacksWatcher = new Stacks.Watcher(config.main);
+  const constructsState = new ConstructsState({
+    app: config.name,
+    region: config.region,
+    stage: config.stage,
+    onConstructsUpdated: () => {
+      if (constructsState) {
+        apiServer &&
+          apiServer.publish("CONSTRUCTS_UPDATED", {
+            constructsUpdated: constructsState.listConstructs(),
+          });
+      }
+    },
+  });
   const stacksBuilder = useStacksBuilder(
     paths.appPath,
     config,
@@ -174,10 +186,10 @@ module.exports = async function (argv, config, cliInfo) {
   stacksBuilder.onEvent((evt) => {
     if (evt.type === "done.invoke.deploy") {
       watcher.reload(paths.appPath, config);
+      constructsState.handleUpdateConstructs();
       funcs.splice(0, funcs.length, ...State.Function.read(paths.appPath));
     }
   });
-  stacksWatcher.onChange.add(() => stacksBuilder.send("FILE_CHANGE"));
   process.stdin.on("data", () => stacksBuilder.send("TRIGGER_DEPLOY"));
 
   // Handle requests from udp or ws
@@ -262,7 +274,9 @@ module.exports = async function (argv, config, cliInfo) {
 
   if (argv.console) {
     isConsoleEnabled = true;
-    await startApiServer();
+    await startApiServer({
+      constructsState,
+    });
   }
 };
 

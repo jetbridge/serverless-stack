@@ -2,6 +2,17 @@ import { Definition } from "./definition";
 import os from "os";
 import path from "path";
 import { Paths } from "../../util";
+import { State } from "../..";
+import { bundle as bundlePython } from "./pythonBundling";
+import * as lambda from "@aws-cdk/aws-lambda";
+
+const RUNTIME_MAP: Record<string, lambda.Runtime> = {
+  "python2.7": lambda.Runtime.PYTHON_2_7,
+  "python3.6": lambda.Runtime.PYTHON_3_6,
+  "python3.7": lambda.Runtime.PYTHON_3_7,
+  "python3.8": lambda.Runtime.PYTHON_3_8,
+  "python3.9": lambda.Runtime.PYTHON_3_9,
+};
 
 export const PythonHandler: Definition = (opts) => {
   const PATH = (() => {
@@ -22,6 +33,16 @@ export const PythonHandler: Definition = (opts) => {
 
   return {
     bundle: () => {
+      //const artifact =
+      // State.Function.artifactsPath(opts.root, opts.id) + ".zip";
+      const asset = bundlePython({
+        installCommands: opts.bundle && opts.bundle.installCommands,
+        runtime: RUNTIME_MAP[opts.runtime],
+        entry: opts.srcPath,
+        outputPathSuffix: ".",
+      });
+      console.log(asset.path);
+
       return {
         handler: opts.handler,
         directory: opts.srcPath,
