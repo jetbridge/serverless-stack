@@ -9,6 +9,7 @@ import * as iam from "@aws-cdk/aws-iam";
 import * as lambda from "@aws-cdk/aws-lambda";
 import * as lambdaNode from "@aws-cdk/aws-lambda-nodejs";
 import * as ssm from "@aws-cdk/aws-ssm";
+import crypto from "crypto";
 
 import { App } from "./App";
 import { Stack } from "./Stack";
@@ -225,7 +226,11 @@ export class Function extends lambda.Function {
       }
     }
 
-    const logicalId = [scope.node.id, id].join("-");
+    const logicalId = crypto
+      .createHash("sha1")
+      .update(scope.node.id + id)
+      .digest("hex")
+      .substring(0, 8);
 
     // Handle local development (ie. sst start)
     // - set runtime to nodejs12.x for non-Node runtimes (b/c the stub is in Node)

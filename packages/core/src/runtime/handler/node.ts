@@ -32,9 +32,16 @@ export const NodeHandler: Definition<Bundle> = (opts) => {
       const p = path.join(opts.srcPath, file);
       return fs.existsSync(p);
     })!;
+  if (!file)
+    throw new Error(`Cannot find a handler file for "${opts.handler}"`);
 
   const artifact = State.Function.artifactsPath(opts.root, opts.id);
-  const target = path.join(artifact, path.dirname(file), base + ".js");
+  const target = path.join(
+    artifact,
+    opts.srcPath,
+    path.dirname(file),
+    base + ".js"
+  );
   const bundle = opts.bundle || {
     minify: true,
   };
@@ -56,6 +63,9 @@ export const NodeHandler: Definition<Bundle> = (opts) => {
     format: "cjs",
     outfile: target,
   };
+  const plugins = bundle.esbuildConfig?.plugins
+    ? path.join(opts.root, bundle.esbuildConfig.plugins)
+    : undefined;
 
   return {
     build: async () => {
@@ -66,9 +76,7 @@ export const NodeHandler: Definition<Bundle> = (opts) => {
       }
       const result = await esbuild.build({
         ...config,
-        plugins: bundle.esbuildConfig?.plugins
-          ? require(path.join(opts.root, bundle.esbuildConfig.plugins))
-          : undefined,
+        plugins: plugins ? require(plugins) : undefined,
         minify: false,
         incremental: true,
       });
@@ -81,16 +89,31 @@ export const NodeHandler: Definition<Bundle> = (opts) => {
       const script = `
         const esbuild = require("esbuild")
         async function run() {
-          esbuild.build(${JSON.stringify(config)})
+          const config = ${JSON.stringify({
+            ...config,
+            plugins,
+          })}
+          esbuild.build({
+            ...config,
+            plugins: config.plugins ? require(config.plugins) : undefined
+          })
         }
         run()
       `;
+      fs.rmSync(artifact, {
+        recursive: true,
+        force: true,
+      });
       fs.mkdirpSync(artifact);
       const builder = path.join(artifact, "builder.js");
       fs.writeFileSync(builder, script);
-      execSync(`node ${builder}`, {
-        stdio: "inherit",
-      });
+      try {
+        execSync(`node "${builder}"`, {
+          stdio: "inherit",
+        });
+      } catch {
+        throw new Error("There was a problem transpiling the Lambda handler.");
+      }
       fs.rmSync(builder);
 
       runBeforeInstall(opts.srcPath, artifact, bundle);
@@ -101,7 +124,7 @@ export const NodeHandler: Definition<Bundle> = (opts) => {
 
       return {
         directory: artifact,
-        handler: opts.handler,
+        handler: path.join(opts.srcPath, opts.handler),
       };
     },
     run: {
