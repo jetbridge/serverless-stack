@@ -41,7 +41,7 @@ export const PythonHandler: Definition = (opts) => {
         entry: opts.srcPath,
         outputPathSuffix: ".",
       });
-      console.log(asset.path);
+      console.log("Hello", asset);
 
       return {
         handler: opts.handler,

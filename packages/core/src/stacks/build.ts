@@ -18,6 +18,7 @@ export async function build(root: string, config: Config) {
     format: "cjs",
     sourcemap: true,
     platform: "node",
+    target: "node14",
     outdir: buildDir,
     entryPoints: [path.join(root, config.main)],
   });
