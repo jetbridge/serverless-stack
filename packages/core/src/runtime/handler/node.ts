@@ -85,12 +85,13 @@ export const NodeHandler: Definition<Bundle> = (opts) => {
         }
         run()
       `;
+      fs.mkdirpSync(artifact);
       const builder = path.join(artifact, "builder.js");
       fs.writeFileSync(builder, script);
       execSync(`node ${builder}`, {
         stdio: "inherit",
       });
-      fs.removeSync(builder);
+      fs.rmSync(builder);
 
       runBeforeInstall(opts.srcPath, artifact, bundle);
 
