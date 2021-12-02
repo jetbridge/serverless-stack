@@ -337,14 +337,23 @@ export class Function extends lambda.Function {
         srcPath: srcPath,
         bundle: props.bundle,
       })!;
-      Function.copyFiles(bundle, srcPath, bundled.directory);
+
+      // Python builder returns AssetCode instead of directory
+      const code = (() => {
+        if ("directory" in bundled) {
+          Function.copyFiles(bundle, srcPath, bundled.directory);
+          return AssetCode.fromAsset(bundled.directory);
+        }
+        return bundled.asset;
+      })();
+
       super(scope, id, {
         ...props,
         runtime,
         tracing,
         memorySize,
         handler: bundled.handler,
-        code: AssetCode.fromAsset(bundled.directory),
+        code: code!,
         timeout,
         layers: Function.handleImportedLayers(scope, props.layers || []),
       });

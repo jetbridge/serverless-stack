@@ -11,11 +11,12 @@ const { getChildLogger } = require("@serverless-stack/core");
 const logger = getChildLogger("api-server");
 
 module.exports = class ApiServer {
-  constructor({ constructsState }) {
+  constructor({ constructsState, stacksBuilderState }) {
     this.requests = {};
     this.server = null;
     this.pubsub = new PubSub();
     this.constructsState = constructsState;
+    this.stacksBuilderState = stacksBuilderState;
   }
 
   async start(port) {
@@ -96,17 +97,17 @@ module.exports = class ApiServer {
         getRuntimeLogs: () => [],
         getInfraStatus: () => {
           // TODO: Implement
-          return false;
+          return {};
         },
         getLambdaStatus: () => {
           // TODO: Implement
-          return false;
+          return {};
         },
         getConstructs: async () => await this.constructsState.listConstructs(),
       },
       Mutation: {
         deploy: async () => {
-          // TODO: Implement
+          this.stacksBuilderState.send("TRIGGER_DEPLOY");
         },
         invoke: async (_, { data }) => {
           await this.constructsState.invoke(JSON.parse(data));

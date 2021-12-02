@@ -2,7 +2,6 @@ import { Definition } from "./definition";
 import os from "os";
 import path from "path";
 import { Paths } from "../../util";
-import { State } from "../..";
 import { bundle as bundlePython } from "./pythonBundling";
 import * as lambda from "@aws-cdk/aws-lambda";
 
@@ -41,11 +40,10 @@ export const PythonHandler: Definition = (opts) => {
         entry: opts.srcPath,
         outputPathSuffix: ".",
       });
-      console.log("Hello", asset);
 
       return {
+        asset,
         handler: opts.handler,
-        directory: opts.srcPath,
       };
     },
     run: {

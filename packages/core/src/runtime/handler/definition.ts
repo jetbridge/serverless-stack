@@ -1,4 +1,5 @@
 import spawn from "cross-spawn";
+import { AssetCode } from "@aws-cdk/aws-lambda";
 
 export type Command = {
   command: string;
@@ -7,9 +8,15 @@ export type Command = {
 };
 
 type BundleResult = {
-  directory: string;
   handler: string;
-};
+} & (
+  | {
+      asset: AssetCode; // Current python builder docker approach requires this
+    }
+  | {
+      directory: string;
+    }
+);
 
 export type Instructions = {
   build?: () => Promise<void>;

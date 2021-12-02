@@ -38,16 +38,12 @@ export const NodeHandler: Definition<Bundle> = (opts) => {
   const bundle = opts.bundle || {
     minify: true,
   };
-  const plugins = bundle.esbuildConfig?.plugins
-    ? require(bundle.esbuildConfig.plugins)
-    : undefined;
   const config: esbuild.BuildOptions = {
     loader: bundle.loader,
     minify: bundle.minify,
     define: bundle.esbuildConfig?.define,
     keepNames: bundle.esbuildConfig?.keepNames,
     entryPoints: [path.join(opts.srcPath, file)],
-    plugins,
     bundle: true,
     external: [
       "aws-sdk",
@@ -70,6 +66,9 @@ export const NodeHandler: Definition<Bundle> = (opts) => {
       }
       const result = await esbuild.build({
         ...config,
+        plugins: bundle.esbuildConfig?.plugins
+          ? require(path.join(opts.root, bundle.esbuildConfig.plugins))
+          : undefined,
         minify: false,
         incremental: true,
       });
@@ -78,7 +77,20 @@ export const NodeHandler: Definition<Bundle> = (opts) => {
     bundle: () => {
       runBeforeBundling(opts.srcPath, artifact, bundle);
 
-      esbuild.buildSync(config);
+      // We cannot use esbuild.buildSync(config) because it doesn't support plugins;
+      const script = `
+        const esbuild = require("esbuild")
+        async function run() {
+          esbuild.build(${JSON.stringify(config)})
+        }
+        run()
+      `;
+      const builder = path.join(artifact, "builder.js");
+      fs.writeFileSync(builder, script);
+      execSync(`node ${builder}`, {
+        stdio: "inherit",
+      });
+      fs.removeSync(builder);
 
       runBeforeInstall(opts.srcPath, artifact, bundle);
 
