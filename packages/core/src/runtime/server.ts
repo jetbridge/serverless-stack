@@ -2,7 +2,6 @@ import express from "express";
 import spawn from "cross-spawn";
 import { ChildProcess } from "child_process";
 import { getChildLogger } from "../logger";
-import { serializeError } from "./error";
 import { v4 } from "uuid";
 
 const logger = getChildLogger("client");
@@ -248,12 +247,12 @@ export class Server {
       try {
         await Handler.build(opts.function);
         this.built[opts.function.id] = true;
-      } catch {
+      } catch (ex) {
         return {
           type: "failure",
           error: {
             errorType: "build_failure",
-            errorMessage: "The function failed to build",
+            errorMessage: `The function ${opts.function.handler} failed to build`,
             stackTrace: [],
           },
         };

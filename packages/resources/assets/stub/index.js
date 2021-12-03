@@ -261,7 +261,11 @@ exports.main = function (event, context, callback) {
       // Note: Do not throw. If error is thrown, errorType becomes
       //       "Runtime.UnhandledPromiseRejection". We need to preserve the
       //       original error type.
-      _ref.callback(deserializeError(responseError));
+      const e = new Error();
+      e.name = responseError.errorType;
+      e.message = responseError.errorMessage;
+      e.stack = responseError.stackTrace.join("\n");
+      _ref.callback(e);
     }
 
     // handle response exit code
@@ -329,71 +333,3 @@ function constructEnvs() {
     });
   return envs;
 }
-
-///////////////////////////////
-// Serialize Error Functions
-//
-// https://github.com/sindresorhus/serialize-error/blob/master/index.js
-///////////////////////////////
-
-const commonProperties = [
-  { property: "name", enumerable: false },
-  { property: "message", enumerable: false },
-  { property: "stack", enumerable: false },
-  { property: "code", enumerable: true },
-];
-
-const destroyCircular = ({ from, seen, to_, forceEnumerable }) => {
-  const to = to_ || (Array.isArray(from) ? [] : {});
-
-  seen.push(from);
-
-  for (const [key, value] of Object.entries(from)) {
-    if (typeof value === "function") {
-      continue;
-    }
-
-    if (!value || typeof value !== "object") {
-      to[key] = value;
-      continue;
-    }
-
-    if (!seen.includes(from[key])) {
-      to[key] = destroyCircular({
-        from: from[key],
-        seen: seen.slice(),
-        forceEnumerable,
-      });
-      continue;
-    }
-
-    to[key] = "[Circular]";
-  }
-
-  for (const { property, enumerable } of commonProperties) {
-    if (typeof from[property] === "string") {
-      Object.defineProperty(to, property, {
-        value: from[property],
-        enumerable: forceEnumerable ? true : enumerable,
-        configurable: true,
-        writable: true,
-      });
-    }
-  }
-
-  return to;
-};
-
-const deserializeError = (value) => {
-  if (value instanceof Error) {
-    return value;
-  }
-
-  if (typeof value === "object" && value !== null && !Array.isArray(value)) {
-    const newError = new Error();
-    destroyCircular({ from: value, seen: [], to_: newError });
-    return newError;
-  }
-
-  return value;
-};

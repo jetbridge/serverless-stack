@@ -31,8 +31,8 @@ function stub(name: string, duration = 1000) {
 
 const machine = createMachine<Context, Events>(
   {
-    initial: "synthing",
-    id: "top",
+    initial: "idle",
+    id: "stacksBuilder",
     states: {
       idle: {
         on: {

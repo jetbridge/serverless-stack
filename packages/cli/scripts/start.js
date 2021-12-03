@@ -1,7 +1,6 @@
 "use strict";
 
 const path = require("path");
-const util = require("util");
 const fs = require("fs-extra");
 const chalk = require("chalk");
 const detect = require("detect-port-alt");
@@ -21,13 +20,11 @@ const {
   deploy,
   prepareCdk,
   writeConfig,
-  isNodeRuntime,
   checkFileExists,
   writeOutputsFile,
 } = require("./util/cdkHelpers");
 const objectUtil = require("../lib/object");
 const ApiServer = require("./util/ApiServer");
-const { deserializeError } = require("../lib/serializeError");
 const ConstructsState = require("./util/ConstructsState");
 
 const API_SERVER_PORT = 4000;
@@ -196,13 +193,12 @@ module.exports = async function (argv, config, cliInfo) {
   async function handleRequest(req) {
     const timeoutAt = Date.now() + req.debugRequestTimeoutInMs;
     const func = funcs.find((f) => f.id === req.functionId);
-    clientLogger.info(
+    const eventSource = parseEventSource(req.event);
+    const eventSourceDesc =
+      eventSource === null ? " invoked" : ` invoked by ${eventSource}`;
+    clientLogger.trace(
       chalk.grey(
-        `${req.context.awsRequestId} REQUEST ${objectUtil.truncate(req.event, {
-          totalLength: 1500,
-          arrayLength: 10,
-          stringLength: 100,
-        })}`
+        `${req.context.awsRequestId} REQUEST ${req.env.AWS_LAMBDA_FUNCTION_NAME} [${func.handler}]${eventSourceDesc}`
       )
     );
     if (!func) {
@@ -251,19 +247,19 @@ module.exports = async function (argv, config, cliInfo) {
     }
 
     if (result.type === "failure") {
-      const errorMessage = isNodeRuntime(func.runtime)
-        ? deserializeError(result.error)
-        : result.rawError;
       clientLogger.info(
         `${chalk.grey(req.context.awsRequestId)} ${chalk.red("ERROR")}`,
-        util.inspect(errorMessage, { depth: null })
+        result.error.errorType + ":",
+        result.error.errorMessage,
+        "\n",
+        result.error.stackTrace?.join("\n")
       );
       return {
         type: "failure",
         body: {
-          errorMessage: result.rawError.errorMessage,
-          errorType: result.rawError.errorType,
-          stackTrace: result.rawError.trace,
+          errorMessage: result.error.errorMessage,
+          errorType: result.error.errorType,
+          stackTrace: result.error.stackTrace,
         },
       };
     }
@@ -498,6 +494,7 @@ function getSystemEnv() {
   delete env.AWS_PROFILE;
   return env;
 }
+
 function forwardToBrowser(message) {
   apiServer &&
     apiServer.publish("RUNTIME_LOG_ADDED", {
@@ -505,4 +502,51 @@ function forwardToBrowser(message) {
         message: message.endsWith("\n") ? message : `${message}\n`,
       },
     });
+}
+
+function parseEventSource(event) {
+  try {
+    // HTTP
+    if (["2.0", "1.0"].includes(event.version) && event.requestContext.apiId) {
+      return event.version === "1.0"
+        ? `API ${event.httpMethod} ${event.path}`
+        : `API ${event.requestContext.http.method} ${event.rawPath}`;
+    }
+
+    // HTTP Authorizer
+    if (["TOKEN", "REQUEST"].includes(event.type) && event.methodArn) {
+      return "API authorizer";
+    }
+
+    if (event.Records && event.Records.length > 0) {
+      // SNS
+      if (event.Records[0].EventSource === "aws:sns") {
+        // TopicArn: arn:aws:sns:us-east-1:123456789012:ExampleTopic
+        const topics = array.unique(
+          event.Records.map((record) => record.Sns.TopicArn.split(":").pop())
+        );
+        return topics.length === 1
+          ? `SNS topic ${topics[0]}`
+          : `SNS topics: ${topics.join(", ")}`;
+      }
+      // SQS
+      if (event.Records.EventSource === "aws:sqs") {
+        // eventSourceARN: arn:aws:sqs:us-east-1:123456789012:MyQueue
+        const names = array.unique(
+          event.Records.map((record) => record.eventSourceARN.split(":").pop())
+        );
+        return names.length === 1
+          ? `SQS queue ${names[0]}`
+          : `SQS queues: ${names.join(", ")}`;
+      }
+      // DynamoDB
+      if (event.Records.EventSource === "aws:dynamodb") {
+        return "DynamoDB";
+      }
+    }
+  } catch (e) {
+    clientLogger.debug("Failed to parse event source", e);
+  }
+
+  return null;
 }

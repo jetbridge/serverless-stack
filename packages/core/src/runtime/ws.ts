@@ -3,7 +3,6 @@ import { EventDelegate } from "../events";
 import { getChildLogger } from "../logger";
 import S3 from "aws-sdk/clients/s3";
 import zlib from "zlib";
-import { ResponseFailure, ResponseSuccess, ResponseTimeout } from "./server";
 
 const s3 = new S3();
 

@@ -76,6 +76,7 @@ export const NodeHandler: Definition<Bundle> = (opts) => {
       }
       const result = await esbuild.build({
         ...config,
+        sourcemap: "inline",
         plugins: plugins ? require(plugins) : undefined,
         minify: false,
         incremental: true,
@@ -131,6 +132,7 @@ export const NodeHandler: Definition<Bundle> = (opts) => {
       command: "npx",
       args: ["aws-lambda-ric", target.replace(".js", ext)],
       env: {
+        NODE_OPTIONS: "--enable-source-maps",
         AWS_LAMBDA_NODEJS_USE_ALTERNATIVE_CLIENT_1: "true",
       },
     },

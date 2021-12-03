@@ -48,9 +48,14 @@ export function buildAsync(opts: Opts, cmd: Command) {
     cwd: opts.srcPath,
   });
   return new Promise<void>((resolve, reject) => {
+    let buffer = "";
+    proc.stdout?.on("data", (data) => (buffer += data));
+    proc.stderr?.on("data", (data) => (buffer += data));
     proc.on("exit", () => {
       if (proc.exitCode === 0) resolve();
-      if (proc.exitCode !== 0) reject();
+      if (proc.exitCode !== 0) {
+        reject(buffer);
+      }
     });
   });
 }
