@@ -9,5 +9,3 @@ require (
 	github.com/pion/stun v0.3.5
 	golang.org/x/net v0.0.0-20211108170745-6635138e15ea
 )
-
-require github.com/jmespath/go-jmespath v0.4.0 // indirect
